@@ -1,9 +1,26 @@
 import argparse
 import json
-import pandas as pd 
+import pandas as pd
 from collections import defaultdict
-import re 
-import numpy as np 
+import re
+import numpy as np
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+
+
+def set_seed(seed=42):
+    import random
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import torch
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    except ImportError:
+        pass
+
 
 def str2bool(value):
     if isinstance(value, bool):
@@ -41,7 +58,11 @@ def analysis_eval_results(eval_result_filepath, analysis_eval_output_path):
     all_infos = list() 
     datas = sorted(datas, key=lambda key:key["system_id"])
 
+    skipped = 0
     for data in datas:
+        if data.get("eval_results") is None:
+            skipped += 1
+            continue
         if data["rounds_related"]:
             count_relate += 1
         else:
@@ -132,6 +153,8 @@ def analysis_eval_results(eval_result_filepath, analysis_eval_output_path):
     parallel_align_rate["total"] = round(parallel_align_valid["total"] / parallel_align_total["total"] * 100, 2)
     total_align_rate["total"] = round(total_align_valid["total"] / total_align_total["total"] * 100, 2)
 
+    if skipped > 0:
+        print(f"WARNING: Skipped {skipped} entries with None eval_results (out of {len(datas)} total)")
     print("=" * 50)
     print(f"多轮相关：{count_relate}, 多轮平行：{count_parallel}")
     print(json.dumps(count_continuous_round_relate, ensure_ascii=False, indent=2))
@@ -147,8 +170,10 @@ def analysis_eval_results(eval_result_filepath, analysis_eval_output_path):
     print(json.dumps(category_valid_rate, ensure_ascii=False, indent=2))
     print("=" * 50)
 
+    for col in all_infos.select_dtypes(include=["object"]).columns:
+        all_infos[col] = all_infos[col].apply(lambda x: ILLEGAL_CHARACTERS_RE.sub("", x) if isinstance(x, str) else x)
+
     with pd.ExcelWriter(analysis_eval_output_path) as writer:
-        # sheet1：详情
         all_infos.to_excel(writer, sheet_name='详情', index=False)
         # sheet2：不同约束类型遵循
         round_evals = pd.DataFrame([categorys_all, categorys_valid, category_valid_rate], index=["约束总量", "遵循数量", "遵循率"])

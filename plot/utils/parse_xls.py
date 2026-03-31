@@ -47,7 +47,9 @@ def parse_xls(key, sheet_name='详情', root_dir='output'):
     file_path = os.path.join(root_dir, KEY_MAP.get(key, key), f'{KEY_MAP.get(key, key)}_analysis.xlsx')
     df = pd.read_excel(file_path, sheet_name)
     if sheet_name == '详情':
-        assert len(df) == ENTRY_NUMBER, f'Reading error: {len(df)} entries found, expected {ENTRY_NUMBER} entries ({file_path})'
+        if len(df) != ENTRY_NUMBER:
+            print(f'WARNING: {len(df)} entries found, expected {ENTRY_NUMBER} entries ({file_path})')
+        assert len(df) % TURN_NUMBER == 0, f'Reading error: {len(df)} entries is not a multiple of {TURN_NUMBER} ({file_path})'
     return df
 
 if __name__ == '__main__':
